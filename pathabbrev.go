@@ -17,7 +17,7 @@ const pathSeparator = string(os.PathSeparator)
 var projectFiles = flag.String("project-files", ".git,.hg,.svn,pom.xml,package.json,.editorconfig", "Files/directories that indicate a repository root when present")
 var envRoots = flag.String("env-roots", "GOPATH", "Environment variables defining special directory paths that should be abbreviated as $ENV. $HOME is automatically included")
 var color = flag.String("color", "project=blue+b,root=245", "Color attributes in the form project=ATTR,root=ATTR, where attributes are as documented in https://github.com/mgutz/ansi")
-var escapeColor = flag.Bool("escape-color", true, "If true, colors will be escaped with %{ %} for use in zsh prompts")
+var escapeColor = flag.Bool("zsh-escape-color", true, "If true, colors will be escaped with %{ %} for use in zsh prompts")
 
 type colorizer struct {
 	EnvRoot func(string) string
