@@ -200,12 +200,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	shortener := pathShortener{
+	shorten := pathShortener{
 		rootFiles: split(*projectFiles),
 		envs:      getEnvs(split(*envRoots)),
 		colorizer: createColorizer(*color, *escapeColor),
-	}
+	}.Shorten
+
 	for _, path := range flag.Args() {
-		fmt.Println(shortener.Shorten(path))
+		fmt.Println(shorten(path))
 	}
 }
