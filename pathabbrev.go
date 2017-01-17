@@ -12,7 +12,7 @@ const homeSigil = "~"
 const pathSeparator = string(os.PathSeparator)
 
 var rootFiles = []string{".git", ".hg", ".svn", "pom.xml", "package.json", ".editorconfig"}
-var shortenRegex = regexp.MustCompile(`^(\w).*`)
+var shortenRegex = regexp.MustCompile(`^([\w-]).*`)
 
 func fileExists(file string) bool {
 	_, err := os.Stat(file)
