@@ -17,7 +17,7 @@ const pathSeparator = string(os.PathSeparator)
 var projectFiles = flag.String("project-files", ".git,.hg,.svn,pom.xml,package.json,.editorconfig", "Files/directories that indicate a repository root when present")
 var envRoots = flag.String("env-roots", "GOPATH", "Environment variables defining special directory paths that should be abbreviated as $ENV. $HOME is automatically included")
 var color = flag.String("color", "project=blue+b,root=245", "Color attributes in the form project=ATTR,root=ATTR, where attributes are as documented in https://github.com/mgutz/ansi")
-var escapeColor = flag.Bool("zsh-escape-color", true, "If true, colors will be escaped with %{ %} for use in zsh prompts")
+var escapeColor = flag.Bool("zsh-escape-color", false, "If true, colors will be escaped with %{ %} for use in zsh prompts")
 
 type colorizer struct {
 	EnvRoot func(string) string
@@ -37,7 +37,7 @@ type envrange []env
 func (e envrange) EnvPrefix(path string) (prefix string, replacedSegments int) {
 	for _, envRep := range e {
 		if path == envRep.value || strings.HasPrefix(path, envRep.value+pathSeparator) {
-			return envRep.name, len(strings.Split(envRep.value, pathSeparator))
+			return envRep.name, strings.Count(envRep.value, pathSeparator) + 1
 		}
 	}
 	return "", 0
@@ -68,7 +68,7 @@ func getEnvs(envNames []string) (envs envrange) {
 			envs = append(envs, env{name: "$" + envName, value: stripTrailingSlash(envValue)})
 		}
 	}
-	return append(envs, env{name: homeSigil, value: os.Getenv("HOME")})
+	return append(envs, env{name: homeSigil, value: stripTrailingSlash(os.Getenv("HOME"))})
 }
 
 func (p pathShortener) sourceRoot(dir string) bool {
