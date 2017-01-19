@@ -16,13 +16,14 @@ const pathSeparator = string(os.PathSeparator)
 
 var projectFiles = flag.String("project-files", ".git,.hg,.svn,pom.xml,package.json,.editorconfig", "Files/directories that indicate a repository root when present")
 var envRoots = flag.String("env-roots", "GOPATH", "Environment variables defining special directory paths that should be abbreviated as $ENV. $HOME is automatically included")
-var color = flag.String("color", "project=blue+b,root=245", "Color attributes in the form project=ATTR,root=ATTR, where attributes are as documented in https://github.com/mgutz/ansi")
+var color = flag.String("color", "project=blue+b,root=245,separator=245", "Color attributes in the form project=ATTR,root=ATTR, where attributes are as documented in https://github.com/mgutz/ansi")
 var escapeColor = flag.Bool("zsh-escape-color", false, "If true, colors will be escaped with %{ %} for use in zsh prompts")
 
 type colorizer struct {
-	EnvRoot func(string) string
-	Project func(string) string
-	None    func(string) string
+	EnvRoot   func(string) string
+	Separator func(string) string
+	Project   func(string) string
+	None      func(string) string
 }
 
 type env struct {
@@ -124,7 +125,7 @@ func (p pathShortener) Shorten(path string) string {
 		add(col(segments[endSegment]))
 	}
 
-	return strings.Join(shortenedSegments, pathSeparator)
+	return strings.Join(shortenedSegments, p.colorizer.Separator(pathSeparator))
 }
 
 var shortenRegex = regexp.MustCompile(`^([\w-]).*`)
@@ -174,18 +175,22 @@ func createColorizer(colorDef string, escapeColors bool) colorizer {
 	}
 
 	c := colorizer{
-		EnvRoot: noop,
-		Project: noop,
-		None:    noop,
+		EnvRoot:   noop,
+		Project:   noop,
+		Separator: noop,
+		None:      noop,
+	}
+
+	colorConfigSettings := map[string]*func(string) string{
+		"root":      &c.EnvRoot,
+		"project":   &c.Project,
+		"separator": &c.Separator,
 	}
 
 	for _, colorSpec := range split(colorDef) {
 		identifier, attrDef := splitIdentifierAttribute(colorSpec)
-		switch identifier {
-		case "root":
-			c.EnvRoot = makeColorizer(ansi.ColorCode(attrDef), ansi.Reset)
-		case "project":
-			c.Project = makeColorizer(ansi.ColorCode(attrDef), ansi.Reset)
+		if setting := colorConfigSettings[identifier]; setting != nil {
+			*setting = makeColorizer(ansi.ColorCode(attrDef), ansi.Reset)
 		}
 	}
 	return c
