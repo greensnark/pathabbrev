@@ -16,13 +16,15 @@ const pathSeparator = string(os.PathSeparator)
 
 var projectFiles = flag.String("project-files", ".git,.hg,.svn,pom.xml,package.json,.editorconfig", "Files/directories that indicate a repository root when present")
 var envRoots = flag.String("env-roots", "GOPATH", "Environment variables defining special directory paths that should be abbreviated as $ENV. $HOME is automatically included")
-var color = flag.String("color", "project=blue+b,root=245,separator=245", "Color attributes in the form project=ATTR,root=ATTR, where attributes are as documented in https://github.com/mgutz/ansi")
+var color = flag.String("color", "project=blue+b,root=245,separator=245,default=[none]", "Color attributes in the form project=ATTR,root=ATTR, where attributes are as documented in https://github.com/mgutz/ansi")
 var escapeColor = flag.Bool("zsh-escape-color", false, "If true, colors will be escaped with %{ %} for use in zsh prompts")
+var abbreviate = flag.Bool("abbrev", true, "If true, paths will be collapsed where possible")
 
 type colorizer struct {
 	EnvRoot   func(string) string
 	Separator func(string) string
 	Project   func(string) string
+	Default   func(string) string
 	None      func(string) string
 }
 
@@ -47,8 +49,9 @@ func (e envrange) EnvPrefix(path string) (prefix string, replacedSegments int) {
 type pathShortener struct {
 	colorizer
 
-	rootFiles []string
-	envs      envrange
+	abbreviate bool
+	rootFiles  []string
+	envs       envrange
 }
 
 func stripTrailingSlash(dir string) string {
@@ -82,6 +85,10 @@ func (p pathShortener) sourceRoot(dir string) bool {
 }
 
 func (p pathShortener) shorten(pathSegment string) string {
+	if !p.abbreviate {
+		return pathSegment
+	}
+
 	return shortenRegex.ReplaceAllString(pathSegment, "$1")
 }
 
@@ -110,7 +117,7 @@ func (p pathShortener) Shorten(path string) string {
 		if p.sourceRoot(dir) {
 			return p.colorizer.Project(segments[i])
 		}
-		return p.shorten(segments[i])
+		return p.colorizer.Default(p.shorten(segments[i]))
 	}
 
 	for i := start; i < endSegment; i++ {
@@ -118,7 +125,7 @@ func (p pathShortener) Shorten(path string) string {
 	}
 
 	if endSegment >= start {
-		col := p.colorizer.None
+		col := p.colorizer.Default
 		if p.sourceRoot(path) {
 			col = p.colorizer.Project
 		}
@@ -150,6 +157,14 @@ func splitSep(s, sep string) []string {
 	return trimmedStrings
 }
 
+func colorCode(attr string) string {
+	if attr == "[none]" {
+		return ansi.Reset
+	}
+
+	return ansi.ColorCode(attr)
+}
+
 func createColorizer(colorDef string, escapeColors bool) colorizer {
 	splitIdentifierAttribute := func(colorSpec string) (string, string) {
 		parts := splitSep(colorSpec, "=")
@@ -178,6 +193,7 @@ func createColorizer(colorDef string, escapeColors bool) colorizer {
 		EnvRoot:   noop,
 		Project:   noop,
 		Separator: noop,
+		Default:   noop,
 		None:      noop,
 	}
 
@@ -185,12 +201,13 @@ func createColorizer(colorDef string, escapeColors bool) colorizer {
 		"root":      &c.EnvRoot,
 		"project":   &c.Project,
 		"separator": &c.Separator,
+		"default":   &c.Default,
 	}
 
 	for _, colorSpec := range split(colorDef) {
 		identifier, attrDef := splitIdentifierAttribute(colorSpec)
 		if setting := colorConfigSettings[identifier]; setting != nil {
-			*setting = makeColorizer(ansi.ColorCode(attrDef), ansi.Reset)
+			*setting = makeColorizer(colorCode(attrDef), ansi.Reset)
 		}
 	}
 	return c
@@ -206,9 +223,10 @@ func main() {
 	}
 
 	shorten := pathShortener{
-		rootFiles: split(*projectFiles),
-		envs:      getEnvs(split(*envRoots)),
-		colorizer: createColorizer(*color, *escapeColor),
+		abbreviate: *abbreviate,
+		rootFiles:  split(*projectFiles),
+		envs:       getEnvs(split(*envRoots)),
+		colorizer:  createColorizer(*color, *escapeColor),
 	}.Shorten
 
 	for _, path := range flag.Args() {
