@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/mgutz/ansi"
 )
@@ -16,7 +17,7 @@ const pathSeparator = string(os.PathSeparator)
 
 var projectFiles = flag.String("project-files", ".git,.hg,.svn,pom.xml,package.json,.editorconfig", "Files/directories that indicate a repository root when present")
 var envRoots = flag.String("env-roots", "GOPATH", "Environment variables defining special directory paths that should be abbreviated as $ENV. $HOME is automatically included")
-var color = flag.String("color", "project=blue+b,root=245,separator=245,default=[none]", "Color attributes in the form project=ATTR,root=ATTR, where attributes are as documented in https://github.com/mgutz/ansi")
+var color = flag.String("color", "project=blue+b,root=245,separator=245,ellipsis=247,default=[none]", "Color attributes in the form project=ATTR,root=ATTR, where attributes are as documented in https://github.com/mgutz/ansi")
 var escapeColor = flag.Bool("zsh-escape-color", false, "If true, colors will be escaped with %{ %} for use in zsh prompts")
 var abbreviate = flag.Bool("abbrev", true, "If true, paths will be collapsed where possible")
 
@@ -24,6 +25,7 @@ type colorizer struct {
 	EnvRoot   func(string) string
 	Separator func(string) string
 	Project   func(string) string
+	Ellipsis  func(string) string
 	Default   func(string) string
 	None      func(string) string
 }
@@ -84,12 +86,14 @@ func (p pathShortener) sourceRoot(dir string) bool {
 	return false
 }
 
+var shortenRegex = regexp.MustCompile(`^([\w-])(.{2}).*`)
+
 func (p pathShortener) shorten(pathSegment string) string {
-	if !p.abbreviate {
+	if !p.abbreviate || utf8.RuneCountInString(pathSegment) <= 3 {
 		return pathSegment
 	}
 
-	return shortenRegex.ReplaceAllString(pathSegment, "$1")
+	return shortenRegex.ReplaceAllString(pathSegment, "$1"+p.colorizer.Ellipsis("$2"))
 }
 
 // Shorten shortens a path applying rootEnvs and rootFiles
@@ -134,8 +138,6 @@ func (p pathShortener) Shorten(path string) string {
 
 	return strings.Join(shortenedSegments, p.colorizer.Separator(pathSeparator))
 }
-
-var shortenRegex = regexp.MustCompile(`^([\w-]).*`)
 
 func fileExists(file string) bool {
 	_, err := os.Stat(file)
@@ -193,11 +195,13 @@ func createColorizer(colorDef string, escapeColors bool) colorizer {
 		EnvRoot:   noop,
 		Project:   noop,
 		Separator: noop,
+		Ellipsis:  noop,
 		Default:   noop,
 		None:      noop,
 	}
 
 	colorConfigSettings := map[string]*func(string) string{
+		"ellipsis":  &c.Ellipsis,
 		"root":      &c.EnvRoot,
 		"project":   &c.Project,
 		"separator": &c.Separator,
